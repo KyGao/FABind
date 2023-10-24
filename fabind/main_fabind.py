@@ -189,6 +189,9 @@ parser.add_argument("--local-eval", action='store_true', default=False)
 parser.add_argument("--train-ligand-torsion-noise", action='store_true', default=False)
 parser.add_argument("--train-pred-pocket-noise", type=float, default=0.0)
 parser.add_argument('--esm2-concat-raw', action='store_true', default=False)
+
+parser.add_argument("--dis-map-thres", type=float, default=10.0)
+
 args = parser.parse_args()
 args.stage_prob = 0.0
 args.center_dist_threshold = 1000.0

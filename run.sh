@@ -11,7 +11,7 @@ accelerate launch fabind/main_fabind.py \
     --resultFolder ./results \
     --use-compound-com-cls \
     --total-epochs 500 \
-    --exp-name fabind-onlydocking-continue \
+    --exp-name fabind-onlydocking-continue-dismap15 \
     --coord-loss-weight 1.0 \
     --pair-distance-loss-weight 1.0 \
     --pair-distance-distill-loss-weight 1.0 \
@@ -30,4 +30,4 @@ accelerate launch fabind/main_fabind.py \
     --random-n-iter \
     --pocket-idx-no-noise \
     --pocket-cls-loss-func bce \
-    --use-esm2-feat --disable-validate
+    --use-esm2-feat --disable-validate --dis-map-thres 15
