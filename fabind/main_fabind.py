@@ -191,6 +191,7 @@ parser.add_argument("--train-pred-pocket-noise", type=float, default=0.0)
 parser.add_argument('--esm2-concat-raw', action='store_true', default=False)
 
 parser.add_argument("--dis-map-thres", type=float, default=10.0)
+parser.add_argument("--onlydocking-from-scratch", action='store_true', default=False)
 
 args = parser.parse_args()
 args.stage_prob = 0.0
@@ -324,6 +325,30 @@ if os.path.exists(output_last_epoch_dir) and os.path.exists(os.path.join(output_
     last_epoch = round(scheduler.state_dict()['last_epoch'] / steps_per_epoch) - 1
     logger.log_message(f'Load model from epoch: {last_epoch}')
 
+
+if args.onlydocking_from_scratch:
+    full_state_dict = torch.load('/home/t-kaiyuangao/workspace/data/epoch_400/pytorch_model.bin')
+
+    named_parameters = dict(accelerator.unwrap_model(model).named_parameters())
+
+    # Define a list of parameter prefixes you want to load
+    param_prefixes_to_load = [
+        'pocket_pred_model.', 
+        'protein_to_pocket.', 
+        'protein_linear.', 
+        'protein_linear_whole_protein.',
+        'compound_linear',
+        'compound_linear_whole_protein',
+        'embedding_shrink',
+        'embedding_enlarge',
+    ]
+
+    # Create a dictionary to hold the parameters you want to load
+    partial_state_dict = {}
+    for name, param in named_parameters.items():
+        for prefix in param_prefixes_to_load:
+            if name.startswith(prefix):
+                partial_state_dict[name] = full_state_dict[name]
 # TODO Future debug when needed
 # if args.restart:
 #     model_ckpt, opt_ckpt, model_args, last_epoch = torch.load(args.restart)
