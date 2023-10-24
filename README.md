@@ -4,9 +4,11 @@ FABind: Fast and Accurate Protein-Ligand Binding 🔥
 
 <div align="center">
 
-[![](https://img.shields.io/badge/paper-pink?style=plastic&logo=GitBook)](https://arxiv.org/abs/2310.06763)
-[![](https://img.shields.io/badge/-github-green?style=plastic&logo=github)](https://github.com/QizhiPei/FABind)
+[![](https://img.shields.io/badge/paper-arxiv-red?style=plastic&logo=GitBook)](https://arxiv.org/abs/2310.06763)
+[![](https://img.shields.io/badge/github-green?style=plastic&logo=github)](https://github.com/QizhiPei/FABind)
 [![](https://img.shields.io/badge/poster-blue?style=plastic&logo=googleslides)](https://neurips.cc/virtual/2023/poster/71739)
+[![](https://img.shields.io/badge/model-pink?style=plastic&logo=themodelsresource)](https://github.com/QizhiPei/FABind/tree/main/ckpt) 
+[![](https://img.shields.io/badge/dataset-zenodo-orange?style=plastic&logo=zenodo)](https://zenodo.org/records/10021618)
 </div>
 
 ## Overview
@@ -15,6 +17,8 @@ This repository contains the source code for *Neurips 2023* paper "[FABind: Fast
 ![](./imgs/pipeline.png)
 
 ## News
+**Oct 10 2023**: The trained FABind model and processed dataset are released!
+
 **Oct 11 2023**: Initial commits. More codes, pre-trained model, and data are coming soon.
 
 ## Setup Environment
@@ -30,16 +34,34 @@ pip install https://data.pyg.org/whl/torch-1.12.0%2Bcu113/torch_sparse-0.6.15%2B
 pip install https://data.pyg.org/whl/torch-1.12.0%2Bcu113/torch_spline_conv-1.2.1%2Bpt112cu113-cp38-cp38-linux_x86_64.whl
 pip install https://data.pyg.org/whl/torch-1.12.0%2Bcu113/pyg_lib-0.2.0%2Bpt112cu113-cp38-cp38-linux_x86_64.whl
 pip install torch-geometric
-pip install torchdrug==0.1.2 rdkit torchmetrics==0.10.2 tqdm mlcrate pyarrow accelerate Bio lmdb fair-esm tensorboard 
+pip install torchdrug==0.1.2 rdkit torchmetrics==0.10.2 tqdm mlcrate pyarrow accelerate Bio lmdb fair-esm tensorboard
+pip install fair-esm
 ```
 
 ## Data
 The PDBbind 2020 dataset can be download from http://www.pdbbind.org.cn. We then follow the same data processing as [TankBind](https://github.com/luwei0917/TankBind/blob/main/examples/construction_PDBbind_training_and_test_dataset.ipynb).
 
+We also provided processed dataset on [zenodo](https://zenodo.org/records/10021618).
+If you want to train FABind from scratch, or reproduce the FABind results, you can:
+1. download dataset from [zenodo](https://zenodo.org/records/10021618)
+2. unzip the `zip` file and place it into `data_path` such that `data_path=pdbbind2020`
+
+### Generate the ESM2 embeddings for the proteins
+Before training or evaluation, you need to first generate the ESM2 embeddings for the proteins based on the preprocessed data above.
+```shell
+data_path=pdbbind2020
+
+python fabind/tools/generate_esm2_t33.py ${data_path}
+```
+Then the ESM2 embedings will be saved at `${data_path}/esm2_t33_650M_UR50D.lmdb`.
+
+## Model
+The pre-trained model is placed at `ckpt/best_model.bin`.
+
 ## Evaluation
 ```shell
-data_path=path_to_your_downloaded_data
-ckpt=path_to_your_downloaded_ckpt
+data_path=pdbbind2020
+ckpt=ckpt/best_model.bin
 
 python fabind/test_fabind.py \
     --batch_size 4 \
@@ -55,9 +77,10 @@ Coming soon...
 
 ## Re-training
 ```shell
-data_path=path_to_your_downloaded_data
-
-python -c "from accelerate.utils import write_basic_config; write_basic_config(mixed_precision='fp16')"
+data_path=pdbbind_2020
+# write the default accelerate settings
+python -c "from accelerate.utils import write_basic_config; write_basic_config(mixed_precision='no')"
+# "accelerate launch" will run the experiments in multi-gpu if applicable 
 accelerate launch fabind/main_fabind.py \
     --batch_size 12 \
     -d 0 \
@@ -91,15 +114,13 @@ accelerate launch fabind/main_fabind.py \
 ```
 
 ## About
-### References
+### Citations
 ```
-@misc{pei2023fabind,
-      title={FABind: Fast and Accurate Protein-Ligand Binding}, 
-      author={Qizhi Pei and Kaiyuan Gao and Lijun Wu and Jinhua Zhu and Yingce Xia and Shufang Xie and Tao Qin and Kun He and Tie-Yan Liu and Rui Yan},
-      year={2023},
-      eprint={2310.06763},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG}
+@article{pei2023fabind,
+  title={FABind: Fast and Accurate Protein-Ligand Binding},
+  author={Pei, Qizhi and Gao, Kaiyuan and Wu, Lijun and Zhu, Jinhua and Xia, Yingce and Xie, Shufang and Qin, Tao and He, Kun and Liu, Tie-Yan and Yan, Rui},
+  journal={arXiv preprint arXiv:2310.06763},
+  year={2023}
 }
 ```
 
