@@ -328,9 +328,7 @@ if os.path.exists(output_last_epoch_dir) and os.path.exists(os.path.join(output_
 
 if args.onlydocking_from_scratch:
     full_state_dict = torch.load('/home/t-kaiyuangao/workspace/data/epoch_400/pytorch_model.bin')
-
     named_parameters = dict(accelerator.unwrap_model(model).named_parameters())
-
     # Define a list of parameter prefixes you want to load
     param_prefixes_to_load = [
         'pocket_pred_model.', 
@@ -342,25 +340,16 @@ if args.onlydocking_from_scratch:
         'embedding_shrink',
         'embedding_enlarge',
     ]
-
     # Create a dictionary to hold the parameters you want to load
     partial_state_dict = {}
     for name, param in named_parameters.items():
         for prefix in param_prefixes_to_load:
             if name.startswith(prefix):
                 partial_state_dict[name] = full_state_dict[name]
-# TODO Future debug when needed
-# if args.restart:
-#     model_ckpt, opt_ckpt, model_args, last_epoch = torch.load(args.restart)
-#     model.load_state_dict(model_ckpt, strict=True)
-#     optimizer.load_state_dict(opt_ckpt)
-#     last_epoch = -1
-# elif args.reload:
-#     model_ckpt, opt_ckpt, model_args, last_epoch = torch.load(args.reload)
-#     model.load_state_dict(model_ckpt, strict=True)
-#     optimizer.load_state_dict(opt_ckpt)
-
-accelerator.unwrap_model(model).load_state_dict(torch.load('/home/t-kaiyuangao/workspace/data/epoch_400/pytorch_model.bin'), strict=False)
+    # Load the partial state dictionary into your model
+    accelerator.unwrap_model(model).load_state_dict(partial_state_dict, strict=False)
+else:
+    accelerator.unwrap_model(model).load_state_dict(torch.load('/home/t-kaiyuangao/workspace/data/epoch_400/pytorch_model.bin'), strict=False)
 
 if args.pred_dis:
     criterion = nn.MSELoss()
