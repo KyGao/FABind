@@ -190,6 +190,9 @@ parser.add_argument("--train-ligand-torsion-noise", action='store_true', default
 parser.add_argument("--train-pred-pocket-noise", type=float, default=0.0)
 parser.add_argument('--esm2-concat-raw', action='store_true', default=False)
 args = parser.parse_args()
+args.stage_prob = 0.0
+args.center_dist_threshold = 1000.0
+
 
 ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
 accelerator = Accelerator(kwargs_handlers=[ddp_kwargs], mixed_precision=args.mixed_precision)
@@ -259,6 +262,19 @@ if args.optim == "adam":
 elif args.optim == "adamw":
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
+for param in model.pocket_pred_model.parameters():
+    param.requires_grad = False
+for param in model.protein_to_pocket.parameters():
+    param.requires_grad = False    
+for param in model.protein_linear_whole_protein.parameters():
+    param.requires_grad = False
+for param in model.compound_linear_whole_protein.parameters():
+    param.requires_grad = False
+for param in model.embedding_shrink.parameters():
+    param.requires_grad = False
+for param in model.embedding_enlarge.parameters():
+    param.requires_grad = False
+
 last_epoch = -1
 steps_per_epoch = len(train_loader)
 total_training_steps = args.total_epochs * len(train_loader)
@@ -315,6 +331,8 @@ if os.path.exists(output_last_epoch_dir) and os.path.exists(os.path.join(output_
 #     model_ckpt, opt_ckpt, model_args, last_epoch = torch.load(args.reload)
 #     model.load_state_dict(model_ckpt, strict=True)
 #     optimizer.load_state_dict(opt_ckpt)
+
+accelerator.unwrap_model(model).load_state_dict(torch.load('/home/t-kaiyuangao/workspace/data/epoch_400/pytorch_model.bin'), strict=False)
 
 if args.pred_dis:
     criterion = nn.MSELoss()
@@ -395,8 +413,8 @@ for epoch in range(last_epoch+1, args.total_epochs):
             print(f"nan occurs in epoch {epoch}")
             continue
         com_coord = data.coords
-        pocket_cls_loss = args.pocket_cls_loss_weight * pocket_cls_criterion(pocket_cls_pred, pocket_cls.float()) * (protein_out_mask_whole.numel() / protein_out_mask_whole.sum())
-        pocket_coord_loss = args.pocket_distance_loss_weight * pocket_coord_criterion(pred_pocket_center, data.coords_center)
+        pocket_cls_loss = torch.tensor(0, device=com_coord_pred.device)
+        pocket_coord_loss = torch.tensor(0, device=com_coord_pred.device)
         contact_loss = args.pair_distance_loss_weight * criterion(y_pred, dis_map) if len(dis_map) > 0 else torch.tensor([0])
         contact_by_pred_loss = args.pair_distance_loss_weight * criterion(y_pred_by_coord, dis_map) if len(dis_map) > 0 else torch.tensor([0])
         contact_distill_loss = args.pair_distance_distill_loss_weight * criterion(y_pred_by_coord, y_pred) if len(y_pred) > 0 else torch.tensor([0])
@@ -556,15 +574,17 @@ for epoch in range(last_epoch+1, args.total_epochs):
     # use_y_mask = args.use_equivalent_native_y_mask or args.use_y_mask
     use_y_mask = False
 
-    if not args.disable_validate:
-        metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, valid_loader, model, com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, args.relative_k,
-                                                            device, pred_dis=pred_dis, use_y_mask=use_y_mask, stage=1)
+    logger.log_message(f"Begin validation")
+    if accelerator.is_main_process:
+        if not args.disable_validate:
+            metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, valid_loader, model, com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, args.relative_k,
+                                                                device, pred_dis=pred_dis, use_y_mask=use_y_mask, stage=1)
 
-        # valid_metrics_list.append(metrics)
-        # logger.log_message(f"epoch {epoch:<4d}, valid, " + print_metrics(metrics))
-        logger.log_stats(metrics, epoch, args, prefix="Valid")
+            # valid_metrics_list.append(metrics)
+            # logger.log_message(f"epoch {epoch:<4d}, valid, " + print_metrics(metrics))
+            logger.log_stats(metrics, epoch, args, prefix="Valid")
 
-        metrics_runtime_no_prefix(metrics, valid_writer, epoch)
+            metrics_runtime_no_prefix(metrics, valid_writer, epoch)
     
     logger.log_message(f"Begin test")
     if accelerator.is_main_process:
