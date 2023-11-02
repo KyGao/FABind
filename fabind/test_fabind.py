@@ -192,6 +192,7 @@ args.exp_name = args_new.exp_name
 args.batch_size = args_new.batch_size
 args.tqdm_interval = 0.1
 args.disable_tqdm = False
+args.dis_map_thres = 10
 
 set_seed(args.seed)
 
@@ -230,7 +231,7 @@ model = get_model(args, logger, device)
 
 model = accelerator.prepare(model)
 
-model.load_state_dict(torch.load(args.ckpt))
+model.load_state_dict(torch.load(args.ckpt), strict=False)
 
 if args.pred_dis:
     criterion = nn.MSELoss()
@@ -254,6 +255,7 @@ logger.log_message(f"Begin test")
 if accelerator.is_main_process:
     metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, test_loader, accelerator.unwrap_model(model), com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, args.relative_k,
                                                         accelerator.device, pred_dis=pred_dis, use_y_mask=False, stage=2)
+    
     logger.log_stats(metrics, 0, args, prefix="Test_pp")
     
 accelerator.wait_for_everyone()

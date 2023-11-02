@@ -14,9 +14,25 @@ from torch_scatter import scatter_mean
 from rdkit import Chem
 from rdkit.Chem import rdMolTransforms
 
+
+import os
 # from feature_utils import read_mol
+
 import sys
 from io import StringIO
+
+from rdkit.Geometry import Point3D
+def write_with_new_coords(mol, new_coords, toFile):
+    # put this new coordinates into the sdf file.
+    w = Chem.SDWriter(toFile)
+    conf = mol.GetConformer()
+    for i in range(mol.GetNumAtoms()):
+        x,y,z = new_coords[i]
+        conf.SetAtomPosition(i,Point3D(x,y,z))
+    # w.SetKekulize(False)
+    w.write(mol)
+    w.close()
+    
 def read_mol(sdf_fileName, mol2_fileName, verbose=False):
     # Chem.WrapLogs()
     stderr = sys.stderr
@@ -268,7 +284,7 @@ def construct_data_from_graph_gvp_mean(args, protein_node_xyz, protein_seq,
         if group == 'test':
             from accelerate.utils import set_seed
             set_seed(seed)
-            pre = "/home/v-peiqizhi/data/pdbbind2020"
+            pre = "../data/fabind"
             mol, _ = read_mol(f"{pre}/renumber_atom_index_same_as_smiles/{pdb_id}.sdf", None)
             rotable_bonds = get_torsions(mol)
             values = 3.1415926 * 2 * np.random.rand(len(rotable_bonds))
@@ -466,6 +482,9 @@ def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, mo
     centroid_dis_2A_list = []
     centroid_dis_5A_list = []
     pdb_list = []
+    
+    protein_num = []
+    ligand_num = []
 
     skip_count = 0
     count = 0
@@ -552,9 +571,25 @@ def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, mo
                 pred_pocket_center_gumbel_mean = pred_pocket_center_gumbel.sum(dim=0) / pred_index_one_hot_true.sum(dim=0) 
                 pocket_coord_pred_list.append(pred_pocket_center_gumbel_mean.unsqueeze(0).detach())
                 pocket_coord_list.append(data.coords_center[i].unsqueeze(0))
+                
+            # @kaiyuan added
+            cutoff = 10
+            save_folder = f'saved_sdf_cutoff_{cutoff}'
+            os.system(f'mkdir -p {save_folder}')
+            protein_num.append(protein_out_mask_whole[i].sum().item())
+            ligand_num.append(len(compound_batch[compound_batch==i]))
+            if torch.mean(torch.abs(pred_pocket_center.squeeze() - data.coords_center[i])).item() > cutoff:
+                mol, _ = read_mol(os.path.join('../data/fabind/renumber_atom_index_same_as_smiles/', data.pdb[i] + '.sdf'), None)
+                toFile = os.path.join(save_folder, data.pdb[i] + '_pred.sdf')
+                new_coords = np.array((com_coord_pred[compound_batch==i] + data.coord_offset[i]).detach().cpu()).tolist()
+                write_with_new_coords(mol, new_coords, toFile)
+                os.system(f'cp /blob/v-gaokaiyuan/data/DiffDock/PDBBind_processed/{data.pdb[i]}/{data.pdb[i]}_protein_processed.pdb {save_folder}/')
+                os.system(f'cp ../data/fabind/renumber_atom_index_same_as_smiles/{data.pdb[i]}.sdf {save_folder}/')
+                with open(os.path.join(save_folder, data.pdb[i] + '_pocket_center.txt'), 'w') as f:
+                    f.write(str(pred_pocket_center.squeeze()))
 
 
-        # real_y_mask_list.append(data.real_y_mask)
+    # real_y_mask_list.append(data.real_y_mask)
     y = torch.cat(y_list)
     y_pred = torch.cat(y_pred_list)
     
@@ -598,6 +633,17 @@ def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, mo
     metrics.update({"pocket_coord_mse_loss": pocket_coord_direct_batch_loss / len(pocket_coord_pred_direct)})
     metrics.update({"pocket_cls_accuracy": pocket_cls_accuracy})
 
+    np_pocket_mae = []
+    np_rmsd = []
+    for i in range(len(rmsd)):
+        np_pocket_mae.append(torch.mean(torch.abs(pocket_coord_pred[i] - pocket_coord[i])).item())
+        np_rmsd.append(rmsd[i].item())
+        
+    np.save('pocket_mae.npy', np.array(np_pocket_mae))
+    np.save('rmsd.npy', np.array(np_rmsd))
+    np.save('protein_num.npy', np.array(protein_num))
+    np.save('ligand_num.npy', np.array(ligand_num))
+    
     if len(pocket_coord_pred_list) > 0:
         metrics.update(pocket_metrics(pocket_coord_pred, pocket_coord))
 

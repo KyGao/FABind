@@ -30,4 +30,4 @@ accelerate launch fabind/main_fabind.py \
     --random-n-iter \
     --pocket-idx-no-noise \
     --pocket-cls-loss-func bce \
-    --use-esm2-feat --disable-validate --dis-map-thres 15 --onlydocking-from-scratch
+    --use-esm2-feat --disable-validate --dis-map-thres 10 # --onlydocking-from-scratch
