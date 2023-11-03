@@ -11,7 +11,7 @@ accelerate launch fabind/main_fabind.py \
     --resultFolder /blob/v-gaokaiyuan/results/distributional-fabind/fabind-onlydocking \
     --use-compound-com-cls \
     --total-epochs 500 \
-    --exp-name fabind-onlydocking-continue-dismap15-random-init-move-pocket \
+    --exp-name fabind-onlydocking-continue-dismap15-random-init-move-pocket-origin \
     --coord-loss-weight 1.0 \
     --pair-distance-loss-weight 1.0 \
     --pair-distance-distill-loss-weight 1.0 \

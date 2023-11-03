@@ -254,7 +254,7 @@ model.eval()
 logger.log_message(f"Begin test")
 if accelerator.is_main_process:
     metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, test_loader, accelerator.unwrap_model(model), com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, args.relative_k,
-                                                        accelerator.device, pred_dis=pred_dis, use_y_mask=False, stage=2)
+                                                        accelerator.device, pred_dis=pred_dis, use_y_mask=False, stage=1)
     logger.log_stats(metrics, 0, args, prefix="Test_pp")
     
 accelerator.wait_for_everyone()

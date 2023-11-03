@@ -305,10 +305,14 @@ class IaBNet_mean_and_pocket_prediction_cls_coords_dependent(torch.nn.Module):
         elif final_stage == 1:
             batched_compound_emb = compound_out_whole_protein
             batched_pocket_emb = protein_out_whole_protein[data['pocket'].keepNode]
-            batched_complex_coord = self.normalize_coord(data['complex'].node_coords.unsqueeze(-2))
-            batched_complex_coord_LAS = self.normalize_coord(data['complex'].node_coords_LAS.unsqueeze(-2))
-
+                        
             for i in range(complex_batch.max()+1):
+                num_compound_atoms = data['compound'].node_feats[compound_batch==i].shape[0]
+                temp_coords = data['complex'].node_coords[complex_batch==i]
+                temp_coords[1:num_compound_atoms+1] = temp_coords[1:num_compound_atoms+1] - temp_coords[1:num_compound_atoms+1].mean(dim=0)
+                temp_coords[num_compound_atoms+2:] = temp_coords[num_compound_atoms+2:] - data.pocket_residue_center[i].unsqueeze(0) # move pocket to origin
+                data['complex'].node_coords[complex_batch==i] = temp_coords
+
                 data.coords[compound_batch==i] = data.coords[compound_batch==i] - data.pocket_residue_center[i].unsqueeze(0)
                 if i == 0:
                     new_samples = torch.cat((
@@ -322,6 +326,10 @@ class IaBNet_mean_and_pocket_prediction_cls_coords_dependent(torch.nn.Module):
                         ), dim=0)
                     new_samples = torch.cat((new_samples, new_sample), dim=0)
             dis_map = data.dis_map
+
+            batched_complex_coord = self.normalize_coord(data['complex'].node_coords.unsqueeze(-2))
+            batched_complex_coord_LAS = self.normalize_coord(data['complex'].node_coords_LAS.unsqueeze(-2))
+
 
 
         complex_coords, complex_out = self.complex_model(

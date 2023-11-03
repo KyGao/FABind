@@ -483,7 +483,6 @@ def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, mo
         com_coord_pred, compound_batch, y_pred, y_pred_by_coord, pocket_cls_pred, pocket_cls, protein_out_mask_whole, p_coords_batched_whole, pocket_coord_pred_direct, dis_map, keepNode_less_5 = model(data, stage=stage)       
         # y = data.y
         com_coord = data.coords
-        
         sd = ((com_coord_pred - com_coord) ** 2).sum(dim=-1)
         rmsd = scatter_mean(src=sd, index=compound_batch, dim=0).sqrt()
         
