@@ -312,11 +312,8 @@ def construct_data_from_graph_gvp_mean(args, protein_node_xyz, protein_seq,
     elif compound_coords_init_mode == 'pocket_center':
         coords_init = input_node_xyz.mean(dim=0).reshape(1, 3) + 5 * (2 * torch.rand(coords.shape) - 1)
     elif compound_coords_init_mode == 'pocket_center_rdkit':
-        if random_rotation:
-            rdkit_coords = torch.tensor(uniform_random_rotation(rdkit_coords))
-        else:
-            rdkit_coords = torch.tensor(rdkit_coords)
-        coords_init = rdkit_coords - rdkit_coords.mean(dim=0).reshape(1, 3) + input_node_xyz.mean(dim=0).reshape(1, 3)
+        rdkit_coords = torch.tensor(rdkit_coords)
+        coords_init = torch.rand_like(rdkit_coords) + input_node_xyz.mean(dim=0).reshape(1, 3)
     elif compound_coords_init_mode == 'redocking':
         coords_rot = torch.tensor(uniform_random_rotation(coords))
         coords_init = coords_rot - coords_rot.mean(dim=0).reshape(1, 3) + input_node_xyz.mean(dim=0).reshape(1, 3)
@@ -426,6 +423,7 @@ def construct_data_from_graph_gvp_mean(args, protein_node_xyz, protein_seq,
 
     data.node_xyz_whole = protein_node_xyz
     data.coords_center = torch.tensor(com, dtype=torch.float).unsqueeze(0)
+    data.pocket_residue_center = input_node_xyz.mean(dim=0).unsqueeze(0)
     data.seq_whole = protein_seq
     data.coord_offset = coords_bias.unsqueeze(0)
     # save the pocket index for binary classification

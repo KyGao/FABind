@@ -8,10 +8,10 @@ accelerate launch fabind/main_fabind.py \
     --data-path $data_path \
     --label baseline \
     --addNoise 5 \
-    --resultFolder ./results \
+    --resultFolder /blob/v-gaokaiyuan/results/distributional-fabind/fabind-onlydocking \
     --use-compound-com-cls \
     --total-epochs 500 \
-    --exp-name fabind-onlydocking-from-scratch-dismap15 \
+    --exp-name fabind-onlydocking-continue-dismap15-random-init-move-pocket \
     --coord-loss-weight 1.0 \
     --pair-distance-loss-weight 1.0 \
     --pair-distance-distill-loss-weight 1.0 \
@@ -30,4 +30,4 @@ accelerate launch fabind/main_fabind.py \
     --random-n-iter \
     --pocket-idx-no-noise \
     --pocket-cls-loss-func bce \
-    --use-esm2-feat --disable-validate --dis-map-thres 15 --onlydocking-from-scratch
+    --use-esm2-feat --disable-validate --dis-map-thres 15
