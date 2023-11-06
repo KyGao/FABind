@@ -144,7 +144,7 @@ parser.add_argument('--pocket-radius', type=float, default=20.0)
 
 parser.add_argument('--rm-LAS-constrained-optim', action='store_true', default=False)
 parser.add_argument('--rm-F-norm', action='store_true', default=False)
-parser.add_argument('--norm-type', type=str, default="all_sample", choices=['per_sample', '4_sample', 'all_sample'])
+parser.add_argument('--norm-type', type=str, default="per_sample", choices=['per_sample', '4_sample', 'all_sample'])
 
 # parser.add_argument("--only-predicted-pocket-mae-thr", type=float, default=3.0)
 parser.add_argument('--noise-for-predicted-pocket', type=float, default=5.0)
@@ -196,7 +196,6 @@ parser.add_argument("--onlydocking-from-scratch", action='store_true', default=F
 args = parser.parse_args()
 args.stage_prob = 0.0
 args.center_dist_threshold = 1000.0
-
 
 ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
 accelerator = Accelerator(kwargs_handlers=[ddp_kwargs], mixed_precision=args.mixed_precision)
@@ -578,8 +577,6 @@ for epoch in range(last_epoch+1, args.total_epochs):
     
     accelerator.wait_for_everyone()
 
-    # metrics_list.append(metrics)
-    # release memory
     y, y_pred = None, None
     com_coord, com_coord_pred = None, None
     rmsd, rmsd_2A, rmsd_5A = None, None, None

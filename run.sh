@@ -2,7 +2,7 @@ data_path=~/workspace/data/fabind
 
 python -c "from accelerate.utils import write_basic_config; write_basic_config(mixed_precision='fp16')"
 accelerate launch fabind/main_fabind.py \
-    --batch_size 5 \
+    --batch_size 4 \
     -d 0 \
     -m 5 \
     --data-path $data_path \
@@ -11,7 +11,7 @@ accelerate launch fabind/main_fabind.py \
     --resultFolder /blob/v-gaokaiyuan/results/distributional-fabind/fabind-onlydocking \
     --use-compound-com-cls \
     --total-epochs 500 \
-    --exp-name fabind-onlydocking-continue-dismap15-random-init-move-pocket-origin \
+    --exp-name fabind-onlydocking-continue-dismap15-random-init-move-pocket-origin3 \
     --coord-loss-weight 1.0 \
     --pair-distance-loss-weight 1.0 \
     --pair-distance-distill-loss-weight 1.0 \
@@ -30,4 +30,6 @@ accelerate launch fabind/main_fabind.py \
     --random-n-iter \
     --pocket-idx-no-noise \
     --pocket-cls-loss-func bce \
-    --use-esm2-feat --disable-validate --dis-map-thres 15
+    --use-esm2-feat --disable-validate --dis-map-thres 10
+
+    # /blob/v-gaokaiyuan/results/distributional-fabind/fabind-onlydocking \
