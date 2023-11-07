@@ -241,6 +241,17 @@ def construct_data_from_graph_gvp_mean(args, protein_node_xyz, protein_seq,
         # if only include less than 5 residues, simply add first 100 residues.
         keepNode[:100] = True
     input_node_xyz = protein_node_xyz[keepNode]
+    input_node_xyz = protein_node_xyz[keepNode]
+    # np.save(f'keepnodes/{pdb_id}_gt.npy', np.nonzero(keepNode))
+    rdkit_coords = torch.tensor(rdkit_coords)
+    center = rdkit_coords.mean(dim=0)
+    differences_squared = (rdkit_coords - center) ** 2
+    mean_squared_differences = differences_squared.sum(dim=1) # [N]
+    rmsds = torch.sqrt(mean_squared_differences) # [N]
+    max_ligand_radius = rmsds.max()
+
+    np.save(f'keepnodes/{pdb_id}_rdkit_max_ligand_radius.npy', max_ligand_radius.clone().detach().cpu())
+    
     # input_edge_idx, input_protein_edge_s, input_protein_edge_v = get_protein_edge_features_and_index(protein_edge_index, protein_edge_s, protein_edge_v, keepNode)
 
     # construct heterogeneous graph data.
@@ -550,6 +561,8 @@ def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, mo
         pocket_coord_pred_direct_list.append(pocket_coord_pred_direct.detach())
         pocket_coord_direct_list.append(data.coords_center)
         for i, j in enumerate(batch_len):
+            # np.save(f'keepnodes/{data.pdb[i]}_rmsd.npy', np.array(rmsd[i].clone().detach().cpu().numpy()))
+        
             count += 1
             pdb_list.append(data.pdb[i])
             pocket_cls_list.append(pocket_cls.detach()[i][:j])
@@ -639,10 +652,10 @@ def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, mo
         np_pocket_mae.append(torch.mean(torch.abs(pocket_coord_pred[i] - pocket_coord[i])).item())
         np_rmsd.append(rmsd[i].item())
         
-    np.save('pocket_mae.npy', np.array(np_pocket_mae))
-    np.save('rmsd.npy', np.array(np_rmsd))
-    np.save('protein_num.npy', np.array(protein_num))
-    np.save('ligand_num.npy', np.array(ligand_num))
+    # np.save('pocket_mae.npy', np.array(np_pocket_mae))
+    # np.save('rmsd.npy', np.array(np_rmsd))
+    # np.save('protein_num.npy', np.array(protein_num))
+    # np.save('ligand_num.npy', np.array(ligand_num))
     
     if len(pocket_coord_pred_list) > 0:
         metrics.update(pocket_metrics(pocket_coord_pred, pocket_coord))

@@ -220,7 +220,7 @@ elif args.redocking_no_rotate:
 
 train, valid, test= get_data(args, logger, addNoise=args.addNoise, use_whole_protein=args.use_whole_protein, compound_coords_init_mode=args.compound_coords_init_mode, pre=args.data_path)
 logger.log_message(f"data point train: {len(train)}, valid: {len(valid)}, test: {len(test)}")
-num_workers = 10
+num_workers = 0
 
 test_loader = DataLoader(test, batch_size=args.batch_size, follow_batch=['x', 'compound_pair'], shuffle=False, pin_memory=False, num_workers=num_workers)
 

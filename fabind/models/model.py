@@ -7,6 +7,7 @@ from models.att_model import EfficientMCAttModel
 import torch.nn.functional as F
 from utils.utils import get_keepNode_tensor, gumbel_softmax_no_random
 import random
+import numpy as np
 
 class Transition_diff_out_dim(torch.nn.Module):
     # separate left/right edges (block1/block2).
@@ -194,7 +195,19 @@ class IaBNet_mean_and_pocket_prediction_cls_coords_dependent(torch.nn.Module):
 
             for i in range(pred_pocket_center.shape[0]):
                 protein_i = data.node_xyz_whole[protein_batch_whole==i].detach()
+                
+                center = pred_pocket_center[i].unsqueeze(0).expand_as(data.coords[compound_batch==i])
+                differences_squared = (data.coords[compound_batch==i] - center) ** 2 # [N, 3]
+                mean_squared_differences = differences_squared.sum(dim=1) # [N]
+                rmsds = torch.sqrt(mean_squared_differences) # [N]
+                cover_ratio = (rmsds < 20.0).sum() / len(rmsds)
+                max_ligand_radius = rmsds.max()
+                # np.save(f'keepnodes/{data.pdb[i]}_cover_ratio.npy', cover_ratio.clone().detach().cpu())
+                np.save(f'keepnodes/{data.pdb[i]}_max_ligand_radius.npy', max_ligand_radius.clone().detach().cpu())
+
                 keepNode = get_keepNode_tensor(protein_i, self.args.pocket_radius, None, pred_pocket_center[i].detach())
+                keepNode_array = np.array(keepNode.clone().detach().cpu())
+                # np.save(f'keepnodes/{data.pdb[i]}_pp.npy', np.nonzero(keepNode_array))
                 # TODO Check the case
                 if keepNode.sum() < 5:
                     # if only include less than 5 residues, simply add first 100 residues.
