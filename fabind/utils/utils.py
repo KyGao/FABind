@@ -424,6 +424,7 @@ def construct_data_from_graph_gvp_mean(args, protein_node_xyz, protein_seq,
     data.node_xyz_whole = protein_node_xyz
     data.coords_center = torch.tensor(com, dtype=torch.float).unsqueeze(0)
     data.pocket_residue_center = input_node_xyz.mean(dim=0).unsqueeze(0)
+    data.node_xyz = data.node_xyz - data.pocket_residue_center
     data.seq_whole = protein_seq
     data.coord_offset = coords_bias.unsqueeze(0)
     # save the pocket index for binary classification

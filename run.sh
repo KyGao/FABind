@@ -8,7 +8,7 @@ accelerate launch fabind/main_fabind.py \
     --data-path $data_path \
     --label baseline \
     --addNoise 5 \
-    --resultFolder /blob/v-gaokaiyuan/results/distributional-fabind/fabind-onlydocking \
+    --resultFolder ./results \
     --use-compound-com-cls \
     --total-epochs 500 \
     --exp-name fabind-onlydocking-continue-dismap15-random-init-move-pocket-origin3 \
