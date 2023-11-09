@@ -22,6 +22,11 @@ from accelerate import Accelerator
 from accelerate import DistributedDataParallelKwargs
 from accelerate.utils import set_seed
 
+import wandb
+
+
+
+
 def Seed_everything(seed=42):
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
@@ -197,11 +202,20 @@ args = parser.parse_args()
 args.stage_prob = 0.0
 args.center_dist_threshold = 1000.0
 
+
 ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
 accelerator = Accelerator(kwargs_handlers=[ddp_kwargs], mixed_precision=args.mixed_precision)
 set_seed(args.seed)
 # Seed_everything(seed=args.seed)
 pre = f"{args.resultFolder}/{args.exp_name}"
+
+if accelerator.is_main_process:
+    wandb.init(
+        project="pocket_radius_pred",
+        name='radius_pred_only_1109'
+    )
+accelerator.wait_for_everyone()    
+
 
 if accelerator.is_main_process:
     os.system(f"mkdir -p {pre}/models")
@@ -365,6 +379,7 @@ if args.pocket_cls_loss_func == 'bce':
     pocket_cls_criterion = nn.BCEWithLogitsLoss(reduction='mean')
 
 pocket_coord_criterion = nn.HuberLoss(delta=args.pocket_coord_huber_delta)
+pocket_radius_criterion = nn.HuberLoss(delta=args.pocket_coord_huber_delta)
 
 
 # metrics_list = []
@@ -423,7 +438,7 @@ for epoch in range(last_epoch+1, args.total_epochs):
         # pocket_cls_pred, protein_out_mask_whole: [B, L]
         # p_coords_batched_whole: [B, L, 3]
         # pred_pocket_center: [B, 3]
-        com_coord_pred, compound_batch, y_pred, y_pred_by_coord, pocket_cls_pred, pocket_cls, protein_out_mask_whole, p_coords_batched_whole, pred_pocket_center, dis_map, keepNode_less_5 = model(data, train=True)
+        pocket_radius_pred, com_coord_pred, compound_batch, y_pred, y_pred_by_coord, pocket_cls_pred, pocket_cls, protein_out_mask_whole, p_coords_batched_whole, pred_pocket_center, dis_map, keepNode_less_5 = model(data, train=True)
         # y = data.y
         if y_pred.isnan().any() or com_coord_pred.isnan().any() or pocket_cls_pred.isnan().any() or pred_pocket_center.isnan().any() or y_pred_by_coord.isnan().any():
             print(f"nan occurs in epoch {epoch}")
@@ -438,6 +453,8 @@ for epoch in range(last_epoch+1, args.total_epochs):
         com_coord_loss = args.coord_loss_weight * com_coord_criterion(com_coord_pred, com_coord) if len(com_coord) > 0 else torch.tensor([0])
         
         
+        pocket_radius_pred_loss = pocket_radius_criterion(pocket_radius_pred.squeeze(1), data.ligand_radius.to(pocket_radius_pred.dtype))
+        
         sd = ((com_coord_pred.detach() - com_coord) ** 2).sum(dim=-1)
         rmsd = scatter_mean(sd, index=compound_batch, dim=0).sqrt().detach()
 
@@ -445,12 +462,17 @@ for epoch in range(last_epoch+1, args.total_epochs):
         centroid_true = scatter_mean(src=com_coord, index=compound_batch, dim=0)
         centroid_dis = (centroid_pred - centroid_true).norm(dim=-1)
         
-        loss = com_coord_loss + \
-            contact_loss + contact_by_pred_loss + contact_distill_loss + \
-            pocket_cls_loss + \
-            pocket_coord_loss
+        loss = pocket_radius_pred_loss
+        # loss = com_coord_loss + \
+        #     contact_loss + contact_by_pred_loss + contact_distill_loss + \
+        #     pocket_cls_loss + \
+        #     pocket_coord_loss
         
         accelerator.backward(loss)
+        
+        if accelerator.is_main_process:
+            wandb.log({"train_radius_loss": pocket_radius_pred_loss.item()})    
+        accelerator.wait_for_everyone()    
         if args.clip_grad:
             # clip_grad_norm_(model.parameters(), max_norm=1.0, error_if_nonfinite=True)
             if accelerator.sync_gradients:
@@ -602,7 +624,7 @@ for epoch in range(last_epoch+1, args.total_epochs):
     
     logger.log_message(f"Begin test")
     if accelerator.is_main_process:
-        metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, test_loader, accelerator.unwrap_model(model), com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, args.relative_k,
+        metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, test_loader, accelerator.unwrap_model(model), com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, pocket_radius_criterion, args.relative_k,
                                                             accelerator.device, pred_dis=pred_dis, use_y_mask=use_y_mask, stage=1)
         # test_metrics_list.append(metrics)
         # logger.log_message(f"epoch {epoch:<4d}, test,  " + print_metrics(metrics))
@@ -611,7 +633,7 @@ for epoch in range(last_epoch+1, args.total_epochs):
         if not args.disable_tensorboard:
             metrics_runtime_no_prefix(metrics, test_writer, epoch)
 
-        metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, test_loader, accelerator.unwrap_model(model), com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, args.relative_k,
+        metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, test_loader, accelerator.unwrap_model(model), com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, pocket_radius_criterion, args.relative_k,
                                                             accelerator.device, pred_dis=pred_dis, use_y_mask=use_y_mask, stage=2)
         # test_metrics_stage2_list.append(metrics)
         # logger.log_message(f"epoch {epoch:<4d}, testp,  " + print_metrics(metrics))

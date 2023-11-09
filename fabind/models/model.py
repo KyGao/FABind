@@ -64,6 +64,8 @@ class IaBNet_mean_and_pocket_prediction_cls_coords_dependent(torch.nn.Module):
         self.embedding_shrink = nn.Linear(embedding_channels, pocket_pred_embedding_channels)
         self.embedding_enlarge = nn.Linear(pocket_pred_embedding_channels, embedding_channels)
         
+        self.pocket_radius_head = Transition_diff_out_dim(embedding_channels=embedding_channels, n=4, out_channels=1)
+        
         self.distmap_mlp = nn.Sequential(
             nn.Linear(embedding_channels, embedding_channels),
             nn.ReLU(),
@@ -130,9 +132,17 @@ class IaBNet_mean_and_pocket_prediction_cls_coords_dependent(torch.nn.Module):
         )
 
         complex_out_whole_protein = self.embedding_enlarge(complex_out_whole_protein)
+        
 
         compound_flag_whole_protein = torch.logical_and(data['complex_whole_protein'].segment == 0, ~data['complex_whole_protein'].is_global)
         compound_out_whole_protein = complex_out_whole_protein[compound_flag_whole_protein]
+
+        # pocket radius predict
+        compound_in_complex_whole_batch = complex_batch_whole_protein[compound_flag_whole_protein]
+        compound_emb_batch, compound_emb_mask = to_dense_batch(compound_out_whole_protein, compound_in_complex_whole_batch)
+
+        pocket_radius_pred = self.pocket_radius_head(compound_emb_batch.sum(dim=1))
+        # pocket_radius_pred = torch.ones_like(compound_emb_batch[:, 0, 0]).unsqueeze(1)
         protein_flag_whole_protein = torch.logical_and(data['complex_whole_protein'].segment == 1, ~data['complex_whole_protein'].is_global)
         protein_out_whole_protein = complex_out_whole_protein[protein_flag_whole_protein]
         protein_out_batched_whole, protein_out_mask_whole = to_dense_batch(protein_out_whole_protein, protein_batch_whole)
@@ -378,7 +388,7 @@ class IaBNet_mean_and_pocket_prediction_cls_coords_dependent(torch.nn.Module):
         
         compound_coords_out = self.unnormalize_coord(compound_coords_out)
         
-        return compound_coords_out, compound_batch, y_pred, y_pred_by_coords, pocket_cls_pred, pocket_cls, protein_out_mask_whole, protein_coords_batched_whole, pred_pocket_center, dis_map, keepNode_less_5
+        return pocket_radius_pred, compound_coords_out, compound_batch, y_pred, y_pred_by_coords, pocket_cls_pred, pocket_cls, protein_out_mask_whole, protein_coords_batched_whole, pred_pocket_center, dis_map, keepNode_less_5
 
 
 def get_model(args, logger, device):
