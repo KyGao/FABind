@@ -449,7 +449,7 @@ def construct_data_from_graph_gvp_mean(args, protein_node_xyz, protein_seq,
 
 
 @torch.no_grad()
-def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, model, com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, pocket_radius_criterion, relative_k, device, pred_dis=False, info=None, saveFileName=None, use_y_mask=False, skip_y_metrics_evaluation=False, stage=1):
+def evaluate_mean_pocket_cls_coord_multi_task(accelerator, epoch, args, data_loader, model, com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, pocket_radius_criterion, relative_k, device, pred_dis=False, info=None, saveFileName=None, use_y_mask=False, skip_y_metrics_evaluation=False, stage=1):
     y_list = []
     y_pred_list = []
     com_coord_list = []
@@ -486,7 +486,8 @@ def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, mo
         data_iter = data_loader
     else:
         data_iter = tqdm(data_loader, mininterval=args.tqdm_interval, disable=not accelerator.is_main_process)
-    for data in data_iter:
+    n_steps_per_epoch = len(data_loader)
+    for batch_id, data in enumerate(data_iter, start=1):
         data = data.to(device)
         pocket_radius_pred, com_coord_pred, compound_batch, y_pred, y_pred_by_coord, pocket_cls_pred, pocket_cls, protein_out_mask_whole, p_coords_batched_whole, pocket_coord_pred_direct, dis_map, keepNode_less_5 = model(data, stage=stage)       
         # y = data.y
@@ -515,7 +516,10 @@ def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, mo
 
 
         
-        wandb.log({"test_radius_loss": pocket_radius_pred_loss.item()})
+        wandb.log({
+            "test/test_loss": pocket_radius_pred_loss.item(),
+            "test/epoch": (batch_id + 1 + (n_steps_per_epoch * epoch)) / n_steps_per_epoch
+            })
         
         batch_loss += len(y_pred)*contact_loss.item()
         batch_by_pred_loss += len(y_pred_by_coord)*contact_by_pred_loss.item()

@@ -11,7 +11,7 @@ accelerate launch fabind/main_fabind.py \
     --resultFolder ./results \
     --use-compound-com-cls \
     --total-epochs 500 \
-    --exp-name debug_pocket_radius_pred \
+    --exp-name debug_pocket_radius_pred_1109 \
     --coord-loss-weight 1.0 \
     --pair-distance-loss-weight 1.0 \
     --pair-distance-distill-loss-weight 1.0 \

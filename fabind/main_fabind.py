@@ -211,8 +211,8 @@ pre = f"{args.resultFolder}/{args.exp_name}"
 
 if accelerator.is_main_process:
     wandb.init(
-        project="pocket_radius_pred",
-        name='radius_pred_only_1109'
+        project="fabind_radius_pred",
+        name='fix-log-1109'
     )
 accelerator.wait_for_everyone()    
 
@@ -425,6 +425,7 @@ for epoch in range(last_epoch+1, args.total_epochs):
     pocket_coord_batch_loss = 0.0
     keepNode_less_5_count = 0
 
+    n_steps_per_epoch = len(train_loader)
     if args.disable_tqdm:
         data_iter = train_loader
     else:
@@ -471,7 +472,10 @@ for epoch in range(last_epoch+1, args.total_epochs):
         accelerator.backward(loss)
         
         if accelerator.is_main_process:
-            wandb.log({"train_radius_loss": pocket_radius_pred_loss.item()})    
+            wandb.log({
+                "train/train_loss": pocket_radius_pred_loss.item(), 
+                "train/epoch": (batch_id + 1 + (n_steps_per_epoch * epoch)) / n_steps_per_epoch
+            })    
         accelerator.wait_for_everyone()    
         if args.clip_grad:
             # clip_grad_norm_(model.parameters(), max_norm=1.0, error_if_nonfinite=True)
@@ -613,7 +617,7 @@ for epoch in range(last_epoch+1, args.total_epochs):
     logger.log_message(f"Begin validation")
     if accelerator.is_main_process:
         if not args.disable_validate:
-            metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, valid_loader, model, com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, args.relative_k,
+            metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, epoch, args, valid_loader, model, com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, args.relative_k,
                                                                 device, pred_dis=pred_dis, use_y_mask=use_y_mask, stage=1)
 
             # valid_metrics_list.append(metrics)
@@ -624,7 +628,7 @@ for epoch in range(last_epoch+1, args.total_epochs):
     
     logger.log_message(f"Begin test")
     if accelerator.is_main_process:
-        metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, test_loader, accelerator.unwrap_model(model), com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, pocket_radius_criterion, args.relative_k,
+        metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, epoch, args, test_loader, accelerator.unwrap_model(model), com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, pocket_radius_criterion, args.relative_k,
                                                             accelerator.device, pred_dis=pred_dis, use_y_mask=use_y_mask, stage=1)
         # test_metrics_list.append(metrics)
         # logger.log_message(f"epoch {epoch:<4d}, test,  " + print_metrics(metrics))
@@ -633,7 +637,7 @@ for epoch in range(last_epoch+1, args.total_epochs):
         if not args.disable_tensorboard:
             metrics_runtime_no_prefix(metrics, test_writer, epoch)
 
-        metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, test_loader, accelerator.unwrap_model(model), com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, pocket_radius_criterion, args.relative_k,
+        metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, epoch, args, test_loader, accelerator.unwrap_model(model), com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, pocket_radius_criterion, args.relative_k,
                                                             accelerator.device, pred_dis=pred_dis, use_y_mask=use_y_mask, stage=2)
         # test_metrics_stage2_list.append(metrics)
         # logger.log_message(f"epoch {epoch:<4d}, testp,  " + print_metrics(metrics))
