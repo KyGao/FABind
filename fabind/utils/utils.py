@@ -235,7 +235,7 @@ def construct_data_from_graph_gvp_mean(args, protein_node_xyz, protein_seq,
     # y_contact = dis_map < contactCutoff # contactCutoff is 8A
     if includeDisMap:
         # treat all distance above 10A as the same.
-        dis_map[dis_map>interactionThresholdDistance] = interactionThresholdDistance
+        dis_map[dis_map>args.dis_map_thres] = args.dis_map_thres
         data.dis_map = torch.tensor(dis_map, dtype=torch.float).flatten()
     # TODO The difference between contactCutoff and interactionThresholdDistance:
     # contactCutoff is for classification evaluation, interactionThresholdDistance is for distance regression.

@@ -284,7 +284,7 @@ class IaBNet_mean_and_pocket_prediction_cls_coords_dependent(torch.nn.Module):
 
                 # distance map
                 dis_map_i = torch.cdist(pocket_coords, data['compound'].node_coords[compound_batch==i].to(torch.float32)).flatten()
-                dis_map_i[dis_map_i>10] = 10
+                dis_map_i[dis_map_i>self.args.dis_map_thres] = self.args.dis_map_thres
                 dis_map = torch.cat((dis_map, dis_map_i), dim=0)
 
             # construct inputs
@@ -358,11 +358,11 @@ class IaBNet_mean_and_pocket_prediction_cls_coords_dependent(torch.nn.Module):
         b = self.distmap_mlp(z).squeeze(-1)
 
         y_pred = b[z_mask]
-        y_pred = y_pred.sigmoid() * 10   # normalize to 0 to 10.
+        y_pred = y_pred.sigmoid() * self.args.dis_map_thres   # normalize to 0 to 10.
 
         y_pred_by_coords = pocket_com_dis_map[z_mask]
         y_pred_by_coords = self.unnormalize_coord(y_pred_by_coords)
-        y_pred_by_coords = torch.clamp(y_pred_by_coords, 0, 10)
+        y_pred_by_coords = torch.clamp(y_pred_by_coords, 0, self.args.dis_map_thres)
         
         compound_coords_out = self.unnormalize_coord(compound_coords_out)
         
