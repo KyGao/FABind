@@ -130,7 +130,7 @@ parser.add_argument('--pocket-radius', type=float, default=20.0)
 
 parser.add_argument('--rm-LAS-constrained-optim', action='store_true', default=False)
 parser.add_argument('--rm-F-norm', action='store_true', default=False)
-parser.add_argument('--norm-type', type=str, default="all_sample", choices=['per_sample', '4_sample', 'all_sample'])
+parser.add_argument('--norm-type', type=str, default="per_sample", choices=['per_sample', '4_sample', 'all_sample'])
 
 # parser.add_argument("--only-predicted-pocket-mae-thr", type=float, default=3.0)
 parser.add_argument('--noise-for-predicted-pocket', type=float, default=5.0)
@@ -177,6 +177,7 @@ parser.add_argument("--ckpt", type=str, default='../checkpoints/pytorch_model.bi
 parser.add_argument("--train-ligand-torsion-noise", action='store_true', default=False)
 parser.add_argument("--train-pred-pocket-noise", type=float, default=0.0)
 parser.add_argument("--esm2-concat-raw", action='store_true', default=False)
+parser.add_argument("--dis-map-thres", type=float, default=10.0)
 args_new = parser.parse_args()
 
 command = "main_fabind.py -d 0 -m 5 --batch_size 3 --label baseline --addNoise 5 --tqdm-interval 60 --use-compound-com-cls --distmap-pred mlp --n-iter 8 --mean-layers 4 --refine refine_coord --coordinate-scale 5 --geometry-reg-step-size 0.001 --rm-layernorm --add-attn-pair-bias --explicit-pair-embed --add-cross-attn-layer --noise-for-predicted-pocket 0.0 --clip-grad --random-n-iter --pocket-idx-no-noise --seed 128 --use-esm2-feat --pocket-pred-layers 1 --pocket-pred-n-iter 1 --center-dist-threshold 4 --pocket-cls-loss-func bce --mixed-precision no --disable-tqdm --disable-validate --log-interval 50 --optim adamw --norm-type per_sample --weight-decay 0.01 --hidden-size 512 --pocket-pred-hidden-size 128 --stage-prob 0.25"

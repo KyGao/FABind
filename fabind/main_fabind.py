@@ -144,7 +144,7 @@ parser.add_argument('--pocket-radius', type=float, default=20.0)
 
 parser.add_argument('--rm-LAS-constrained-optim', action='store_true', default=False)
 parser.add_argument('--rm-F-norm', action='store_true', default=False)
-parser.add_argument('--norm-type', type=str, default="all_sample", choices=['per_sample', '4_sample', 'all_sample'])
+parser.add_argument('--norm-type', type=str, default="per_sample", choices=['per_sample', '4_sample', 'all_sample'])
 
 # parser.add_argument("--only-predicted-pocket-mae-thr", type=float, default=3.0)
 parser.add_argument('--noise-for-predicted-pocket', type=float, default=5.0)
@@ -191,6 +191,7 @@ parser.add_argument("--train-pred-pocket-noise", type=float, default=0.0)
 parser.add_argument('--esm2-concat-raw', action='store_true', default=False)
 
 parser.add_argument("--dis-map-thres", type=float, default=10.0)
+
 args = parser.parse_args()
 
 ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
@@ -256,6 +257,8 @@ from models.model import *
 device = 'cuda'
 
 model = get_model(args, logger, device)
+if args.reload:
+    model.load_state_dict(torch.load(args.reload))
 if args.optim == "adam":
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 elif args.optim == "adamw":
