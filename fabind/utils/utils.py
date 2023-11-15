@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from tqdm.auto import tqdm
 import torchmetrics
 from torch_scatter import scatter_mean
-
+import wandb
 from rdkit import Chem
 from rdkit.Chem import rdMolTransforms
 
@@ -423,6 +423,12 @@ def construct_data_from_graph_gvp_mean(args, protein_node_xyz, protein_seq,
     data['compound_atom_edge_list'].x = (input_atom_edge_list[:,:2].long().contiguous() + 1).clone()
     data['LAS_edge_list'].x = data['complex', 'LAS', 'complex'].edge_index.clone().t()
     # add whole protein information for pocket prediction
+    
+    # max sphere radius
+    coords_tensor = torch.tensor(coords)
+    center = coords_tensor.mean(dim=0)
+    distances = torch.norm(coords_tensor - center, dim=1)
+    data.ligand_radius = distances.max()
 
     data.node_xyz_whole = protein_node_xyz
     data.coords_center = torch.tensor(com, dtype=torch.float).unsqueeze(0)
@@ -445,7 +451,7 @@ def construct_data_from_graph_gvp_mean(args, protein_node_xyz, protein_seq,
 
 
 @torch.no_grad()
-def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, model, com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, relative_k, device, pred_dis=False, info=None, saveFileName=None, use_y_mask=False, skip_y_metrics_evaluation=False, stage=1):
+def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, model, com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, pocket_radius_criterion, relative_k, device, pred_dis=False, info=None, saveFileName=None, use_y_mask=False, skip_y_metrics_evaluation=False, stage=1):
     y_list = []
     y_pred_list = []
     com_coord_list = []
@@ -484,7 +490,7 @@ def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, mo
         data_iter = tqdm(data_loader, mininterval=args.tqdm_interval, disable=not accelerator.is_main_process)
     for data in data_iter:
         data = data.to(device)
-        com_coord_pred, compound_batch, y_pred, y_pred_by_coord, pocket_cls_pred, pocket_cls, protein_out_mask_whole, p_coords_batched_whole, pocket_coord_pred_direct, dis_map, keepNode_less_5 = model(data, stage=stage)       
+        com_coord_pred, compound_batch, y_pred, y_pred_by_coord, pocket_cls_pred, pocket_cls, protein_out_mask_whole, p_coords_batched_whole, pocket_coord_pred_direct, dis_map, keepNode_less_5, pocket_radius_criterion = model(data, stage=stage)       
         # y = data.y
         com_coord = data.coords
         
@@ -507,6 +513,7 @@ def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, mo
         pocket_coord_direct_loss = args.pocket_distance_loss_weight * pocket_coord_criterion(pocket_coord_pred_direct, data.coords_center)
 
         com_coord_loss = args.coord_loss_weight * com_coord_criterion(com_coord_pred, com_coord)
+        pocket_radius_pred_loss = pocket_radius_criterion(pocket_radius_pred.squeeze(1), data.ligand_radius.to(pocket_radius_pred.dtype))
 
         batch_loss += len(y_pred)*contact_loss.item()
         batch_by_pred_loss += len(y_pred_by_coord)*contact_by_pred_loss.item()
@@ -606,7 +613,7 @@ def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, mo
     return metrics
 
 @torch.no_grad()
-def evaluate_mean_pocket_cls_coord_pocket_pred(args, data_loader, model, com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, relative_k, device, pred_dis=False, info=None, saveFileName=None, use_y_mask=False, skip_y_metrics_evaluation=False, stage=1):
+def evaluate_mean_pocket_cls_coord_pocket_pred(args, data_loader, model, com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, pocket_radius_criterion, relative_k, device, pred_dis=False, info=None, saveFileName=None, use_y_mask=False, skip_y_metrics_evaluation=False, stage=1):
     # contain the ground truth for classiifcation(may not all)
     pocket_coord_list = []
     pocket_coord_pred_list = []
@@ -627,7 +634,7 @@ def evaluate_mean_pocket_cls_coord_pocket_pred(args, data_loader, model, com_coo
     for data in tqdm(data_loader, mininterval=args.tqdm_interval):
         data = data.to(device)
         
-        pocket_cls_pred, pocket_cls, protein_out_mask_whole, p_coords_batched_whole, pocket_coord_pred_direct, keepNode_less_5 = model(data, stage=stage)        
+        pocket_cls_pred, pocket_cls, protein_out_mask_whole, p_coords_batched_whole, pocket_coord_pred_direct, keepNode_less_5, pocket_radius_pred = model(data, stage=stage)        
         
         pocket_cls_loss = args.pocket_cls_loss_weight * pocket_cls_criterion(pocket_cls_pred, pocket_cls.float())
         pocket_coord_direct_loss = args.pocket_distance_loss_weight * pocket_coord_criterion(pocket_coord_pred_direct, data.coords_center)

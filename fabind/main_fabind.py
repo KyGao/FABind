@@ -191,7 +191,7 @@ parser.add_argument("--train-pred-pocket-noise", type=float, default=0.0)
 parser.add_argument('--esm2-concat-raw', action='store_true', default=False)
 
 parser.add_argument("--dis-map-thres", type=float, default=10.0)
-
+parser.add_argument("--pocket-radius-loss-weight", type=float, default=1.0)
 args = parser.parse_args()
 
 ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
@@ -258,7 +258,7 @@ device = 'cuda'
 
 model = get_model(args, logger, device)
 if args.reload:
-    model.load_state_dict(torch.load(args.reload))
+    model.load_state_dict(torch.load(args.reload), strict=False)
 if args.optim == "adam":
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 elif args.optim == "adamw":
@@ -336,6 +336,7 @@ if args.pocket_cls_loss_func == 'bce':
     pocket_cls_criterion = nn.BCEWithLogitsLoss(reduction='mean')
 
 pocket_coord_criterion = nn.HuberLoss(delta=args.pocket_coord_huber_delta)
+pocket_radius_criterion = nn.HuberLoss(delta=args.pocket_coord_huber_delta)
 
 
 # metrics_list = []
@@ -394,7 +395,7 @@ for epoch in range(last_epoch+1, args.total_epochs):
         # pocket_cls_pred, protein_out_mask_whole: [B, L]
         # p_coords_batched_whole: [B, L, 3]
         # pred_pocket_center: [B, 3]
-        com_coord_pred, compound_batch, y_pred, y_pred_by_coord, pocket_cls_pred, pocket_cls, protein_out_mask_whole, p_coords_batched_whole, pred_pocket_center, dis_map, keepNode_less_5 = model(data, train=True)
+        com_coord_pred, compound_batch, y_pred, y_pred_by_coord, pocket_cls_pred, pocket_cls, protein_out_mask_whole, p_coords_batched_whole, pred_pocket_center, dis_map, keepNode_less_5, pocket_radius_pred = model(data, train=True)
         # y = data.y
         if y_pred.isnan().any() or com_coord_pred.isnan().any() or pocket_cls_pred.isnan().any() or pred_pocket_center.isnan().any() or y_pred_by_coord.isnan().any():
             print(f"nan occurs in epoch {epoch}")
@@ -407,7 +408,7 @@ for epoch in range(last_epoch+1, args.total_epochs):
         contact_distill_loss = args.pair_distance_distill_loss_weight * criterion(y_pred_by_coord, y_pred) if len(y_pred) > 0 else torch.tensor([0])
 
         com_coord_loss = args.coord_loss_weight * com_coord_criterion(com_coord_pred, com_coord) if len(com_coord) > 0 else torch.tensor([0])
-        
+        pocket_radius_pred_loss = args.pocket_radius_loss_weight * pocket_radius_criterion(pocket_radius_pred.squeeze(1), data.ligand_radius.to(pocket_radius_pred.dtype))
         
         sd = ((com_coord_pred.detach() - com_coord) ** 2).sum(dim=-1)
         rmsd = scatter_mean(sd, index=compound_batch, dim=0).sqrt().detach()
@@ -418,7 +419,7 @@ for epoch in range(last_epoch+1, args.total_epochs):
         
         loss = com_coord_loss + \
             contact_loss + contact_by_pred_loss + contact_distill_loss + \
-            pocket_cls_loss + \
+            pocket_cls_loss + pocket_radius_pred_loss + \
             pocket_coord_loss
         
         accelerator.backward(loss)
@@ -575,7 +576,7 @@ for epoch in range(last_epoch+1, args.total_epochs):
     
     logger.log_message(f"Begin test")
     if accelerator.is_main_process:
-        metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, test_loader, accelerator.unwrap_model(model), com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, args.relative_k,
+        metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, test_loader, accelerator.unwrap_model(model), com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, pocket_radius_criterion, args.relative_k,
                                                             accelerator.device, pred_dis=pred_dis, use_y_mask=use_y_mask, stage=1)
         # test_metrics_list.append(metrics)
         # logger.log_message(f"epoch {epoch:<4d}, test,  " + print_metrics(metrics))
@@ -584,7 +585,7 @@ for epoch in range(last_epoch+1, args.total_epochs):
         if not args.disable_tensorboard:
             metrics_runtime_no_prefix(metrics, test_writer, epoch)
 
-        metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, test_loader, accelerator.unwrap_model(model), com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, args.relative_k,
+        metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, test_loader, accelerator.unwrap_model(model), com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, pocket_radius_criterion, args.relative_k,
                                                             accelerator.device, pred_dis=pred_dis, use_y_mask=use_y_mask, stage=2)
         # test_metrics_stage2_list.append(metrics)
         # logger.log_message(f"epoch {epoch:<4d}, testp,  " + print_metrics(metrics))
