@@ -1,4 +1,3 @@
-
 import torch
 from utils.metrics import *
 import numpy as np
@@ -451,7 +450,7 @@ def construct_data_from_graph_gvp_mean(args, protein_node_xyz, protein_seq,
 
 
 @torch.no_grad()
-def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, model, com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, pocket_radius_criterion, relative_k, device, pred_dis=False, info=None, saveFileName=None, use_y_mask=False, skip_y_metrics_evaluation=False, stage=1):
+def evaluate_mean_pocket_cls_coord_multi_task(accelerator, epoch, args, data_loader, model, com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, pocket_radius_criterion, relative_k, device, pred_dis=False, info=None, saveFileName=None, use_y_mask=False, skip_y_metrics_evaluation=False, stage=1):
     y_list = []
     y_pred_list = []
     com_coord_list = []
@@ -483,14 +482,16 @@ def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, mo
     com_coord_batch_loss = 0.0
     pocket_cls_batch_loss = 0.0
     pocket_coord_direct_batch_loss = 0.0
+    pocket_radius_pred_batch_loss = 0.0
     keepNode_less_5_count = 0
+    n_steps_per_epoch = len(data_loader)
     if args.disable_tqdm:
         data_iter = data_loader
     else:
         data_iter = tqdm(data_loader, mininterval=args.tqdm_interval, disable=not accelerator.is_main_process)
-    for data in data_iter:
+    for batch_id, data in enumerate(data_iter, start=1):
         data = data.to(device)
-        com_coord_pred, compound_batch, y_pred, y_pred_by_coord, pocket_cls_pred, pocket_cls, protein_out_mask_whole, p_coords_batched_whole, pocket_coord_pred_direct, dis_map, keepNode_less_5, pocket_radius_criterion = model(data, stage=stage)       
+        com_coord_pred, compound_batch, y_pred, y_pred_by_coord, pocket_cls_pred, pocket_cls, protein_out_mask_whole, p_coords_batched_whole, pocket_coord_pred_direct, dis_map, keepNode_less_5, pocket_radius_pred = model(data, stage=stage)       
         # y = data.y
         com_coord = data.coords
         
@@ -521,6 +522,7 @@ def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, mo
         com_coord_batch_loss += len(com_coord_pred)*com_coord_loss.item()
         pocket_cls_batch_loss += len(pocket_cls_pred)*pocket_cls_loss.item()
         pocket_coord_direct_batch_loss += len(pocket_coord_pred_direct)*pocket_coord_direct_loss.item()
+        pocket_radius_pred_batch_loss += len(pocket_radius_pred)*pocket_radius_pred_loss.item()
         keepNode_less_5_count += keepNode_less_5
 
         y_list.append(dis_map)
@@ -610,6 +612,32 @@ def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, mo
     if len(pocket_coord_pred_list) > 0:
         metrics.update(pocket_metrics(pocket_coord_pred, pocket_coord))
 
+    wandb.log({
+            "test/skip_count": skip_count,
+            "test/keepNode < 5": keepNode_less_5_count,
+            "test/contact_loss": batch_loss/len(y_pred),
+            "test/contact_by_pred_loss": batch_by_pred_loss/len(y_pred),
+            "test/contact_distill_loss": batch_distill_loss/len(y_pred),
+            "test/com_coord_huber_loss": com_coord_batch_loss/len(com_coord_pred),
+            "test/rmsd": rmsd.mean().item(),
+            "test/rmsd < 2A": rmsd_2A.mean().item(), 
+            "test/rmsd < 5A": rmsd_5A.mean().item(),
+            "test/rmsd 25%": rmsd_25.item(),
+            "test/rmsd 50%": rmsd_50.item(),
+            "test/rmsd 75%": rmsd_75.item(),
+            "test/centroid_dis": centroid_dis.mean().item(),
+            "test/centroid_dis < 2A": centroid_dis_2A.mean().item(),
+            "test/centroid_dis < 5A": centroid_dis_5A.mean().item(),
+            "test/centroid_dis 25%": centroid_dis_25.item(),
+            "test/centroid_dis 50%": centroid_dis_50.item(),
+            "test/centroid_dis 75%": centroid_dis_75.item(),
+            "test/pocket_cls_bce_loss": pocket_cls_batch_loss / len(pocket_coord_pred),
+            "test/pocket_cls_accuracy": pocket_cls_accuracy,
+            "test/pocket_radius_pred_loss": pocket_radius_pred_batch_loss / len(pocket_radius_pred),
+            "test/pocket_mae": metrics["pocket_mae"],
+            "test/epoch": epoch
+        })
+    
     return metrics
 
 @torch.no_grad()

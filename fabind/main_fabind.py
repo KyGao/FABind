@@ -22,6 +22,8 @@ from accelerate import Accelerator
 from accelerate import DistributedDataParallelKwargs
 from accelerate.utils import set_seed
 
+import wandb
+
 def Seed_everything(seed=42):
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
@@ -199,6 +201,14 @@ accelerator = Accelerator(kwargs_handlers=[ddp_kwargs], mixed_precision=args.mix
 set_seed(args.seed)
 # Seed_everything(seed=args.seed)
 pre = f"{args.resultFolder}/{args.exp_name}"
+
+if accelerator.is_main_process:
+    wandb.init(
+        project="fabind-v2.0",
+        name=args.exp_name,
+        config=args
+    )
+accelerator.wait_for_everyone()    
 
 if accelerator.is_main_process:
     os.system(f"mkdir -p {pre}/models")
@@ -380,8 +390,10 @@ for epoch in range(last_epoch+1, args.total_epochs):
     com_coord_batch_loss = 0.0
     pocket_cls_batch_loss = 0.0
     pocket_coord_batch_loss = 0.0
+    pocket_radius_pred_batch_loss = 0.0
     keepNode_less_5_count = 0
 
+    n_steps_per_epoch = len(train_loader)
     if args.disable_tqdm:
         data_iter = train_loader
     else:
@@ -430,6 +442,19 @@ for epoch in range(last_epoch+1, args.total_epochs):
         
         optimizer.step()
         scheduler.step()
+        
+        if accelerator.is_main_process:
+            wandb.log({
+                "train_inner/com_coord_loss": com_coord_loss.item(),
+                "train_inner/contact_loss": contact_loss.item(),
+                "train_inner/contact_by_pred_loss": contact_by_pred_loss.item(),
+                "train_inner/contact_distill_loss": contact_distill_loss.item(),
+                "train_inner/pocket_cls_loss": pocket_cls_loss.item(),
+                "train_inner/pocket_radius_pred_loss": pocket_radius_pred_loss.item(),
+                "train_inner/pocket_coord_loss": pocket_coord_loss.item(),
+                "train_inner/train_loss": loss.item(), 
+                "train_inner/epoch": (batch_id + 1 + (n_steps_per_epoch * epoch)) / n_steps_per_epoch
+            })
 
         batch_loss += len(y_pred)*contact_loss.item()
         batch_by_pred_loss += len(y_pred_by_coord)*contact_by_pred_loss.item()
@@ -438,6 +463,7 @@ for epoch in range(last_epoch+1, args.total_epochs):
 
         pocket_cls_batch_loss += len(pocket_cls_pred)*pocket_cls_loss.item()
         pocket_coord_batch_loss += len(pred_pocket_center)*pocket_coord_loss.item()
+        pocket_radius_pred_batch_loss += len(pocket_radius_pred)*pocket_radius_pred_loss.item()
 
         keepNode_less_5_count += keepNode_less_5
 
@@ -542,6 +568,34 @@ for epoch in range(last_epoch+1, args.total_epochs):
     metrics.update({"pocket_cls_accuracy": pocket_cls_accuracy})
     metrics.update(pocket_metrics(pocket_coord_pred, pocket_coord))
     
+    if accelerator.is_main_process:
+        wandb.log({
+            "train/skip_count": skip_count,
+            "train/keepNode < 5": keepNode_less_5_count,
+            "train/contact_loss": batch_loss/len(y_pred),
+            "train/contact_by_pred_loss": batch_by_pred_loss/len(y_pred),
+            "train/contact_distill_loss": batch_distill_loss/len(y_pred),
+            "train/com_coord_huber_loss": com_coord_batch_loss/len(com_coord_pred),
+            "train/rmsd": rmsd.mean().item(),
+            "train/rmsd < 2A": rmsd_2A.mean().item(), 
+            "train/rmsd < 5A": rmsd_5A.mean().item(),
+            "train/rmsd 25%": rmsd_25.item(),
+            "train/rmsd 50%": rmsd_50.item(),
+            "train/rmsd 75%": rmsd_75.item(),
+            "train/centroid_dis": centroid_dis.mean().item(),
+            "train/centroid_dis < 2A": centroid_dis_2A.mean().item(),
+            "train/centroid_dis < 5A": centroid_dis_5A.mean().item(),
+            "train/centroid_dis 25%": centroid_dis_25.item(),
+            "train/centroid_dis 50%": centroid_dis_50.item(),
+            "train/centroid_dis 75%": centroid_dis_75.item(),
+            "train/pocket_cls_bce_loss": pocket_cls_batch_loss / len(pocket_coord_pred),
+            "train/pocket_coord_mse_loss": pocket_coord_batch_loss / len(pocket_coord_pred),
+            "train/pocket_cls_accuracy": pocket_cls_accuracy,
+            "train/pocket_radius_pred_loss": pocket_radius_pred_batch_loss / len(pocket_radius_pred),
+            "train/pocket_mae": metrics["pocket_mae"],
+            "train/epoch": epoch
+        })
+    
     # logger.log_message(f"epoch {epoch:<4d}, train, " + print_metrics(metrics))
     logger.log_stats(metrics, epoch, args, prefix="Train")
     if accelerator.is_main_process and not args.disable_tensorboard:
@@ -565,7 +619,7 @@ for epoch in range(last_epoch+1, args.total_epochs):
     logger.log_message(f"Begin validation")
     if accelerator.is_main_process:
         if not args.disable_validate:
-            metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, valid_loader, model, com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, args.relative_k,
+            metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, epoch, args, valid_loader, model, com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, args.relative_k,
                                                                 device, pred_dis=pred_dis, use_y_mask=use_y_mask, stage=1)
 
             # valid_metrics_list.append(metrics)
@@ -576,7 +630,7 @@ for epoch in range(last_epoch+1, args.total_epochs):
     
     logger.log_message(f"Begin test")
     if accelerator.is_main_process:
-        metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, test_loader, accelerator.unwrap_model(model), com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, pocket_radius_criterion, args.relative_k,
+        metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, epoch, args, test_loader, accelerator.unwrap_model(model), com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, pocket_radius_criterion, args.relative_k,
                                                             accelerator.device, pred_dis=pred_dis, use_y_mask=use_y_mask, stage=1)
         # test_metrics_list.append(metrics)
         # logger.log_message(f"epoch {epoch:<4d}, test,  " + print_metrics(metrics))
@@ -585,7 +639,7 @@ for epoch in range(last_epoch+1, args.total_epochs):
         if not args.disable_tensorboard:
             metrics_runtime_no_prefix(metrics, test_writer, epoch)
 
-        metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, test_loader, accelerator.unwrap_model(model), com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, pocket_radius_criterion, args.relative_k,
+        metrics = evaluate_mean_pocket_cls_coord_multi_task(accelerator, epoch, args, test_loader, accelerator.unwrap_model(model), com_coord_criterion, criterion, pocket_cls_criterion, pocket_coord_criterion, pocket_radius_criterion, args.relative_k,
                                                             accelerator.device, pred_dis=pred_dis, use_y_mask=use_y_mask, stage=2)
         # test_metrics_stage2_list.append(metrics)
         # logger.log_message(f"epoch {epoch:<4d}, testp,  " + print_metrics(metrics))
