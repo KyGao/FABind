@@ -250,7 +250,7 @@ def construct_data_from_graph_gvp_mean(args, protein_node_xyz, protein_seq,
     rmsds = torch.sqrt(mean_squared_differences) # [N]
     max_ligand_radius = rmsds.max()
 
-    np.save(f'keepnodes/{pdb_id}_rdkit_max_ligand_radius.npy', max_ligand_radius.clone().detach().cpu())
+    # np.save(f'keepnodes/{pdb_id}_rdkit_max_ligand_radius.npy', max_ligand_radius.clone().detach().cpu())
     
     # input_edge_idx, input_protein_edge_s, input_protein_edge_v = get_protein_edge_features_and_index(protein_edge_index, protein_edge_s, protein_edge_v, keepNode)
 
@@ -519,6 +519,10 @@ def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, mo
         sd = ((com_coord_pred - com_coord) ** 2).sum(dim=-1)
         rmsd = scatter_mean(src=sd, index=compound_batch, dim=0).sqrt()
         
+        for i in range(len(data.pdb)):
+            with open(f'test_log/rmsd.txt', 'a') as f:
+                f.write(f"{data.pdb[i]} {str(rmsd[i].item())}\n")
+        
         centroid_pred = scatter_mean(src=com_coord_pred, index=compound_batch, dim=0)
         centroid_true = scatter_mean(src=com_coord, index=compound_batch, dim=0)
         centroid_dis = (centroid_pred - centroid_true).norm(dim=-1)
@@ -586,20 +590,20 @@ def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, mo
                 pocket_coord_list.append(data.coords_center[i].unsqueeze(0))
                 
             # @kaiyuan added
-            cutoff = 10
-            save_folder = f'saved_sdf_cutoff_{cutoff}'
-            os.system(f'mkdir -p {save_folder}')
-            protein_num.append(protein_out_mask_whole[i].sum().item())
-            ligand_num.append(len(compound_batch[compound_batch==i]))
-            if torch.mean(torch.abs(pred_pocket_center.squeeze() - data.coords_center[i])).item() > cutoff:
-                mol, _ = read_mol(os.path.join('../data/fabind/renumber_atom_index_same_as_smiles/', data.pdb[i] + '.sdf'), None)
-                toFile = os.path.join(save_folder, data.pdb[i] + '_pred.sdf')
-                new_coords = np.array((com_coord_pred[compound_batch==i] + data.coord_offset[i]).detach().cpu()).tolist()
-                write_with_new_coords(mol, new_coords, toFile)
-                os.system(f'cp /blob/v-gaokaiyuan/data/DiffDock/PDBBind_processed/{data.pdb[i]}/{data.pdb[i]}_protein_processed.pdb {save_folder}/')
-                os.system(f'cp ../data/fabind/renumber_atom_index_same_as_smiles/{data.pdb[i]}.sdf {save_folder}/')
-                with open(os.path.join(save_folder, data.pdb[i] + '_pocket_center.txt'), 'w') as f:
-                    f.write(str(pred_pocket_center.squeeze()))
+            # cutoff = 10
+            # save_folder = f'saved_sdf_cutoff_{cutoff}'
+            # os.system(f'mkdir -p {save_folder}')
+            # protein_num.append(protein_out_mask_whole[i].sum().item())
+            # ligand_num.append(len(compound_batch[compound_batch==i]))
+            # if torch.mean(torch.abs(pred_pocket_center.squeeze() - data.coords_center[i])).item() > cutoff:
+            #     mol, _ = read_mol(os.path.join('../data/fabind/renumber_atom_index_same_as_smiles/', data.pdb[i] + '.sdf'), None)
+            #     toFile = os.path.join(save_folder, data.pdb[i] + '_pred.sdf')
+            #     new_coords = np.array((com_coord_pred[compound_batch==i] + data.coord_offset[i]).detach().cpu()).tolist()
+            #     write_with_new_coords(mol, new_coords, toFile)
+            #     os.system(f'cp /blob/v-gaokaiyuan/data/DiffDock/PDBBind_processed/{data.pdb[i]}/{data.pdb[i]}_protein_processed.pdb {save_folder}/')
+            #     os.system(f'cp ../data/fabind/renumber_atom_index_same_as_smiles/{data.pdb[i]}.sdf {save_folder}/')
+            #     with open(os.path.join(save_folder, data.pdb[i] + '_pocket_center.txt'), 'w') as f:
+            #         f.write(str(pred_pocket_center.squeeze()))
 
 
     # real_y_mask_list.append(data.real_y_mask)
@@ -652,10 +656,10 @@ def evaluate_mean_pocket_cls_coord_multi_task(accelerator, args, data_loader, mo
         np_pocket_mae.append(torch.mean(torch.abs(pocket_coord_pred[i] - pocket_coord[i])).item())
         np_rmsd.append(rmsd[i].item())
         
-    # np.save('pocket_mae.npy', np.array(np_pocket_mae))
-    # np.save('rmsd.npy', np.array(np_rmsd))
-    # np.save('protein_num.npy', np.array(protein_num))
-    # np.save('ligand_num.npy', np.array(ligand_num))
+    # np.save('keepnodes/pocket_mae.npy', np.array(np_pocket_mae))
+    # np.save('keepnodes/rmsd.npy', np.array(np_rmsd))
+    # np.save('keepnodes/protein_num.npy', np.array(protein_num))
+    # np.save('keepnodes/ligand_num.npy', np.array(ligand_num))
     
     if len(pocket_coord_pred_list) > 0:
         metrics.update(pocket_metrics(pocket_coord_pred, pocket_coord))

@@ -202,8 +202,12 @@ class IaBNet_mean_and_pocket_prediction_cls_coords_dependent(torch.nn.Module):
                 rmsds = torch.sqrt(mean_squared_differences) # [N]
                 cover_ratio = (rmsds < 20.0).sum() / len(rmsds)
                 max_ligand_radius = rmsds.max()
+                
+                with open(f'test_log/cover_ratio_max_rad.txt', 'a') as f:
+                    f.write(f"{data.pdb[i]} {str(cover_ratio.item())} {str(max_ligand_radius.item())}\n")
+                
                 # np.save(f'keepnodes/{data.pdb[i]}_cover_ratio.npy', cover_ratio.clone().detach().cpu())
-                np.save(f'keepnodes/{data.pdb[i]}_max_ligand_radius.npy', max_ligand_radius.clone().detach().cpu())
+                # np.save(f'keepnodes/{data.pdb[i]}_max_ligand_radius.npy', max_ligand_radius.clone().detach().cpu())
 
                 keepNode = get_keepNode_tensor(protein_i, self.args.pocket_radius, None, pred_pocket_center[i].detach())
                 keepNode_array = np.array(keepNode.clone().detach().cpu())
