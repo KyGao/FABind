@@ -33,6 +33,7 @@ git lfs install
 git clone https://github.com/QizhiPei/FABind.git --recursive
 conda create --name fabind python=3.8
 conda activate fabind
+conda install -c conda-forge graph-tool -y
 conda install pytorch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 cudatoolkit=11.3 -c pytorch
 pip install https://data.pyg.org/whl/torch-1.12.0%2Bcu113/torch_cluster-1.6.0%2Bpt112cu113-cp38-cp38-linux_x86_64.whl
 pip install https://data.pyg.org/whl/torch-1.12.0%2Bcu113/torch_scatter-2.1.0%2Bpt112cu113-cp38-cp38-linux_x86_64.whl
@@ -42,16 +43,16 @@ pip install https://data.pyg.org/whl/torch-1.12.0%2Bcu113/pyg_lib-0.2.0%2Bpt112c
 pip install torch-geometric==2.4.0
 pip install torchdrug==0.1.2 torchmetrics==0.10.2 tqdm mlcrate pyarrow accelerate Bio lmdb fair-esm tensorboard
 pip install fair-esm
+pip install wandb spyrmsd
 pip install rdkit-pypi==2021.03.4
 conda install -c conda-forge openbabel # install openbabel to save .mol2 file and .sdf file at the same time
 cd FABind_plus
 ```
 
 ## Data
-The PDBbind 2020 dataset can be download from http://www.pdbbind.org.cn. We then follow the same data processing as [TankBind](https://github.com/luwei0917/TankBind/blob/main/examples/construction_PDBbind_training_and_test_dataset.ipynb).
+Compared to FABind, we additionally add isomorphism features and construct `data_new.pt` using scripts in `fabind/tools/inject_isomorphism_to_data.py`. Everything else remains the same. We provide the processed dataset on [zenodo](https://zenodo.org/records/10021618).
 
-We also provided processed dataset on [zenodo](https://zenodo.org/records/10021618).
-If you want to train FABind from scratch, or reproduce the FABind results, you can:
+If you want to train FABind+ from scratch, or reproduce the FABind+ results, you can:
 1. download dataset from [zenodo](https://zenodo.org/records/10021618)
 2. unzip the `zip` file and place it into `data_path` such that `data_path=pdbbind2020`
 
@@ -65,11 +66,24 @@ python fabind/tools/generate_esm2_t33.py ${data_path}
 Then the ESM2 embedings will be saved at `${data_path}/dataset/processed/esm2_t33_650M_UR50D.lmdb`.
 
 ## Model
-The pre-trained model is placed at `ckpt/confidence_model.bin`, which will be automatically downloaded when cloning this reporsitory with `--recursive`. 
+The pre-trained regression-based model is placed at `ckpt/fabind_plus_best_ckpt.bin`, and the sampling-based model is at `ckpt/confidence_model.bin`, which will be automatically downloaded when cloning this reporsitory with `--recursive`. 
 
 You can also manually download the pre-trained model from [Hugging Face](https://huggingface.co/KyGao/FABind_plus_model)
 
 ## Evaluation
+### Regression results
+```shell
+ckpt_path=ckpt/fabind_plus_best_ckpt.bin
+data_path=pdbbind2020
+python fabind/test_regression_fabind.py \
+    --batch_size 4 \
+    --data-path $data_path \
+    --resultFolder ./results \
+    --exp-name test_exp \
+    --symmetric-rmsd pdbbind2020/renumber_atom_index_same_as_smiles \
+    --ckpt $ckpt_path
+```
+
 ```shell
 data_path=../data/fabind
 SEED=3704
